@@ -5,7 +5,12 @@ from app import queries
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-GREETING_RE = re.compile(r"\b(hi|hello|hey|good morning|good afternoon|good evening)\b", re.I)
+# Anchored: only a message that is *just* a greeting counts. "hi, what time do you close?" is an
+# hours question, and must reach the hours rule instead of being swallowed by a greeting reply.
+GREETING_RE = re.compile(
+    r"^\W*(?:hi|hello|hey|good morning|good afternoon|good evening)(?:\W+(?:there|everyone|all))?\W*$",
+    re.I,
+)
 HOURS_RE = re.compile(r"\b(hours?|open|close|closing|opening)\b", re.I)
 # "food"/"eat" deliberately excluded -- too generic, they also appear in FAQ
 # questions ("is the food halal") that have nothing to do with today's menu.

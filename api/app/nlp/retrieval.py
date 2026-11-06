@@ -35,6 +35,9 @@ def search(db: Session, text: str) -> tuple[FaqChunk | None, float]:
         return None, 1.0
 
     chunk, distance = row
-    if distance > RETRIEVAL_DISTANCE_THRESHOLD:
+    # "not <=" rather than ">": a query sharing no word with the FAQ vocabulary embeds to the zero
+    # vector, whose cosine distance is NaN, and `NaN > threshold` is False -- which would let an
+    # arbitrary FAQ answer through as if it were a confident match.
+    if not distance <= RETRIEVAL_DISTANCE_THRESHOLD:
         return None, distance
     return chunk, distance

@@ -2,7 +2,7 @@ from datetime import time
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MenuItemOut(BaseModel):
@@ -28,7 +28,18 @@ class OpeningHoursOut(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
+    # 1000 matches the chat_messages.user_message column; anything longer would only fail at
+    # insert time as a 500 instead of a clean 422.
+    message: str = Field(max_length=1000)
+
+    @field_validator("message")
+    @classmethod
+    def no_nul(cls, value: str) -> str:
+        # Postgres text cannot hold NUL; it would blow up at insert time as a 500.
+        # (Lone surrogates are already rejected by pydantic itself.)
+        if "\x00" in value:
+            raise ValueError("message must not contain NUL characters")
+        return value
 
 
 class ChatResponse(BaseModel):
@@ -41,3 +52,12 @@ class ChatResponse(BaseModel):
 
 class RatingRequest(BaseModel):
     rating: Literal[1, -1] | None  # +1 good, -1 bad, null clears an earlier rating
+
+    @field_validator("rating", mode="before")
+    @classmethod
+    def real_int(cls, value):
+        # Literal compares by equality, so `true` and `1.0` would otherwise slip through as 1
+        # (strict mode doesn't change that).
+        if value is not None and type(value) is not int:
+            raise ValueError("rating must be 1, -1 or null")
+        return value

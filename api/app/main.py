@@ -1,5 +1,7 @@
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app import queries
@@ -18,6 +20,15 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    # FastAPI's default 422 echoes each error's `input`. For a message holding a lone surrogate
+    # that makes the *response* impossible to encode (a 500), and a huge message gets echoed back
+    # in full. Say where and why it failed, never what was sent.
+    errors = [{"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 @app.get("/health")

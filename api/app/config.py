@@ -7,7 +7,7 @@ load_dotenv()
 # No fallback on purpose: with no local database anymore, a silent localhost default
 # would only turn a missing .env into a confusing "connection refused".
 DATABASE_URL = os.environ["DATABASE_URL"]
-CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
+CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")]
 
 # Tuned against cross-validated out-of-fold confidence, not guessed: on the
 # placeholder training set, correct predictions have median confidence ~0.40

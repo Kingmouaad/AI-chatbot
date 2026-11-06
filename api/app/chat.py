@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -36,7 +38,12 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
 
 @router.put("/chat/{message_id}/rating", status_code=204)
-def rate(message_id: int, request: RatingRequest, db: Session = Depends(get_db)):
+def rate(
+    # bounded to the int4 primary key: a larger id would be a database error (500), not a 404
+    message_id: Annotated[int, Path(ge=1, le=2**31 - 1)],
+    request: RatingRequest,
+    db: Session = Depends(get_db),
+):
     message = db.get(ChatMessage, message_id)
     if message is None:
         raise HTTPException(status_code=404, detail="message not found")
