@@ -1,0 +1,17 @@
+question,answer,category
+How can I pay at the cafeteria?,We accept cash and the student meal card. Card top-ups are available at the administration office.,payment
+Do you accept credit or debit cards?,"No, only cash and the student meal card are accepted. No bank cards.",payment
+"I lost my meal card, what do I do?",Report a lost meal card at the administration office with your student ID. A replacement can be issued within 2 business days.,payment
+Is the food halal?,Yes. All meat served in the cafeteria is halal-certified.,dietary
+Do you cater to vegetarians?,We offer at least one vegetarian option at lunch and dinner every day.,dietary
+Can you accommodate food allergies?,Let the counter staff know about any allergy when ordering. Major allergens are listed on the daily menu board.,dietary
+Where is the cafeteria located?,"The main cafeteria is on the ground floor of Building B, next to the student affairs office.",location
+How do I file a complaint about the food or service?,Complaints can be submitted at the suggestion box near the cafeteria entrance or emailed to the cafeteria administration.,complaints
+Can I get a refund if I don't use my meal credit?,Unused meal credit carries over to the next semester but is not refunded in cash.,payment
+Is there a student discount?,Students with a valid student card get the discounted meal price automatically at checkout.,payment
+Are the cafeteria hours different during Ramadan?,"Yes, hours change during Ramadan. Check the notices posted at the cafeteria entrance for the updated schedule.",hours
+Is the cafeteria wheelchair accessible?,"Yes, the cafeteria has a ramp entrance and accessible seating near the main entrance.",accessibility
+How many people can the cafeteria seat?,The main dining hall seats around 200 students.,general
+Who do I contact about a lost item in the cafeteria?,Lost items can be claimed at the student affairs office in Building B.,general
+Do you offer takeaway or to-go boxes?,"Yes, takeaway containers are available at the counter on request.",general
+Is there a vegan option available?,A vegan option is available on request but may not always be listed on the daily board. Ask the counter staff.,dietary
