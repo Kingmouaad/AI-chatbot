@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import ChatMessage
 from app.nlp import pipeline
-from app.schemas import ChatRequest, ChatResponse
+from app.schemas import ChatRequest, ChatResponse, RatingRequest
 
 router = APIRouter()
 
@@ -33,3 +33,12 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         source=result.source,
         message_id=message.id,
     )
+
+
+@router.put("/chat/{message_id}/rating", status_code=204)
+def rate(message_id: int, request: RatingRequest, db: Session = Depends(get_db)):
+    message = db.get(ChatMessage, message_id)
+    if message is None:
+        raise HTTPException(status_code=404, detail="message not found")
+    message.rating = request.rating
+    db.commit()

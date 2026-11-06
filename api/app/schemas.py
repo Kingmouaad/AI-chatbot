@@ -1,5 +1,6 @@
 from datetime import time
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -36,3 +37,7 @@ class ChatResponse(BaseModel):
     intent: str | None
     source: str
     message_id: int
+
+
+class RatingRequest(BaseModel):
+    rating: Literal[1, -1] | None  # +1 good, -1 bad, null clears an earlier rating
