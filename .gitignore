@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+api/app/nlp/artifacts/*.joblib
+api/app/nlp/artifacts/*.png
+api/app/nlp/artifacts/*.txt
+node_modules/
+.next/
+*.log

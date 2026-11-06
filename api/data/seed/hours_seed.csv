@@ -1,0 +1,8 @@
+day_of_week,open_time,close_time,note
+0,07:30,20:00,
+1,07:30,20:00,
+2,07:30,20:00,
+3,07:30,20:00,
+4,07:30,19:00,Shorter hours on Friday
+5,08:00,18:00,Reduced weekend service
+6,09:00,17:00,Reduced weekend service

@@ -1,0 +1,27 @@
+name,description,price,category,dietary_tags,day_of_week
+Omelette & Bread,"Omelette with cheese, bread, olive oil",150,breakfast,vegetarian,0
+Chicken Couscous,Couscous with chicken and vegetables,350,lunch,halal,0
+Lentil Soup & Salad,Lentil soup with a side salad,250,lunch,vegetarian;vegan,0
+Grilled Fish & Rice,Grilled fish with rice and vegetables,380,dinner,halal,0
+Yogurt & Fruit,Plain yogurt with seasonal fruit,120,breakfast,vegetarian,1
+Beef Tajine,Beef tajine with potatoes,380,lunch,halal,1
+Vegetable Pasta,Pasta with mixed vegetables,280,lunch,vegetarian,1
+Chicken Soup & Bread,Chicken soup with bread,220,dinner,halal,1
+Bread & Jam,Bread with butter and jam,100,breakfast,vegetarian;vegan,2
+Couscous Royale,Couscous with mixed meats,400,lunch,halal,2
+Chickpea Stew,Chickpea and vegetable stew,260,lunch,vegetarian;vegan;halal,2
+Grilled Chicken & Fries,Grilled chicken with fries,320,dinner,halal,2
+Boiled Eggs & Bread,Boiled eggs with bread,110,breakfast,vegetarian,3
+Fish Chorba,Fish chorba soup with bread,300,lunch,halal,3
+Rice & Grilled Vegetables,Rice with grilled seasonal vegetables,260,lunch,vegetarian;vegan,3
+Beef Burger & Salad,Beef burger with a side salad,340,dinner,halal,3
+Pancakes & Honey,Pancakes with honey,140,breakfast,vegetarian,4
+Vegetable Couscous,Couscous with mixed vegetables,280,lunch,vegetarian;vegan,4
+Grilled Lamb & Rice,Grilled lamb with rice,420,lunch,halal,4
+Vegetable Soup & Bread,Vegetable soup with bread,200,dinner,vegetarian;vegan,4
+Cheese & Bread,Cheese with bread and olives,130,breakfast,vegetarian,5
+Chicken Chorba,Chicken chorba soup,290,lunch,halal,5
+Pasta Bolognese,Pasta with meat sauce,330,dinner,halal,5
+Fruit Salad & Yogurt,Fresh fruit salad with yogurt,140,breakfast,vegetarian;vegan,6
+Grilled Fish & Salad,Grilled fish with a side salad,360,lunch,halal,6
+Vegetable Tajine,Mixed vegetable tajine,270,dinner,vegetarian;vegan;halal,6

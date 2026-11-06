@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+psycopg[binary]
+alembic
+pgvector
+scikit-learn
+joblib
+matplotlib
+python-dotenv
+pytest
