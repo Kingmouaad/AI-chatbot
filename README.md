@@ -1,8 +1,57 @@
 # cafeteriaai
 
-A text chat assistant for a university campus cafeteria. English only for v1. Every answer is templated or retrieved — there is no LLM call anywhere in the reply path.
+A text chat assistant for a university campus cafeteria: ask about today's menu, the opening hours, or general cafeteria questions (payments, lost cards, dietary policy, ...) in a ChatGPT-style web app. English only for v1. Every answer is templated or retrieved — there is no LLM call anywhere in the reply path.
+
+| Part | What it is | Built with |
+|---|---|---|
+| `api/` | The backend: the three-layer reply pipeline, the REST API, the evaluation scripts | Python, FastAPI, SQLAlchemy, scikit-learn, pgvector |
+| `web/` | The frontend: chat UI with a collapsible sidebar, a "thinking" pause, GSAP typed-out replies and feedback icons | Next.js 16, React 19, TypeScript, Tailwind 4, GSAP, lucide-react |
+| Neon | The database: hosted Postgres with the `vector` extension | Postgres 18 |
 
 This doc explains what exists, why each piece is shaped the way it is, and shows the one function that does the real work at each stage.
+
+## Project structure
+
+```
+cafeteriaai/
+├── api/
+│   ├── app/
+│   │   ├── main.py          FastAPI app: /health, /menu, /hours, CORS
+│   │   ├── chat.py          POST /chat (runs the pipeline, logs it) and PUT /chat/{id}/rating
+│   │   ├── nlp/             rules.py -> classifier.py -> retrieval.py, orchestrated by pipeline.py
+│   │   ├── models.py        the four SQLAlchemy tables
+│   │   ├── queries.py       menu / hours lookups
+│   │   ├── schemas.py       request and response models
+│   │   └── config.py        env vars + the tuned thresholds
+│   ├── alembic/             schema migrations
+│   ├── data/seed/           menu, hours, FAQ and intent-training CSVs
+│   ├── scripts/             train_retrieval, train_classifier, seed_db
+│   └── tests/               pipeline smoke test + input-validation tests
+├── web/
+│   ├── app/                 layout.tsx (wraps every page in the Shell), page.tsx, globals.css
+│   ├── components/          Shell (sidebar), ChatView (input + messages), BotMessage (typing + feedback)
+│   └── lib/                 api.ts (backend client), chats.ts (chat history store)
+├── .env.example             DATABASE_URL and CORS_ORIGINS for the backend
+└── README.md
+```
+
+## How a message travels
+
+```
+Browser (web/)                         FastAPI (api/)                          Neon
+--------------                         ---------------                         ----
+type + Enter
+user bubble + "thinking" dots
+        |------- POST /chat ----------> rules -> classifier -> retrieval ----> read menu / hours / FAQ
+        |                                  |
+ (dots stay at least 3 s)                  +-- log the exchange -------------> INSERT chat_messages
+        |
+reply arrives <---- {reply, suggestions, intent, source, message_id}
+GSAP types it out, one character
+after another; then thumbs up/down
+        |
+click a thumb ---- PUT /chat/{message_id}/rating --------------------------> UPDATE chat_messages.rating
+```
 
 ## Architecture at a glance
 
@@ -76,6 +125,8 @@ def match(text: str, db) -> RuleResult | None:
 
 One real bug this layer had and no longer has: the menu regex originally included the words "food" and "eat", which also show up in FAQ questions ("is the **food** halal") that have nothing to do with today's menu — those got hijacked into a menu dump instead of reaching retrieval. Fixed by dropping the two generic words and keeping only actual meal-time words (`menu|lunch|breakfast|dinner|serving|served`).
 
+A second one, found by black-box testing: the greeting regex originally matched a greeting *anywhere* in the message, so "Hello, what's on the menu today?" got only a greeting back. It is now anchored (`^...$`): only a bare "hi" / "good morning" counts, and anything longer goes on to the hours and menu rules or the classifier.
+
 ### 2. Classifier — the "base model"
 
 **Purpose:** everything rules didn't catch still needs to be routed somewhere. **Logic:** TF-IDF turns the message into a bag-of-words vector, Logistic Regression scores it against 5 intents (`menu_query`, `hours_query`, `faq`, `feedback`, `out_of_scope`), and the top-scoring intent wins — unless its own confidence is too low, in which case it's treated as out-of-scope rather than trusted. Logistic Regression specifically (over something like a linear SVM) because it gives genuine probabilities (`predict_proba`) out of the box, which the confidence check needs.
@@ -111,12 +162,14 @@ def search(db: Session, text: str) -> tuple[FaqChunk | None, float]:
         return None, 1.0
 
     chunk, distance = row
-    if distance > RETRIEVAL_DISTANCE_THRESHOLD:
+    if not distance <= RETRIEVAL_DISTANCE_THRESHOLD:  # "not <=", not ">": see the NaN note below
         return None, distance
     return chunk, distance
 ```
 
 Why plain TF-IDF and not a real sentence-embedding model (e.g. sentence-transformers): with only ~15-20 FAQ entries, there's no corpus large enough for a heavier model to meaningfully out-perform TF-IDF on, and `torch`/`transformers` would eat a large chunk of Render's free-tier 512MB RAM for that marginal gain. TF-IDF also skipped an extra dimensionality-reduction step (TruncatedSVD) that was in an earlier draft of this plan — same reasoning, not enough data for it to learn anything useful, and it was one more trained artifact to maintain for no measurable benefit. The embedding dimension itself (currently 61) isn't a round number either — it's the real vocabulary size measured by fitting the vectorizer on the actual FAQ questions, because guessing a dimension and hoping the real vocabulary matches it is exactly the kind of mismatch that silently breaks or silently degrades a retrieval system.
+
+One guard worth knowing about: a query that shares no word with the FAQ vocabulary (say "asdf qwerty") embeds to the zero vector, and pgvector's cosine distance for a zero vector is `NaN`. `NaN > 0.6` is `False` in Python, so a plain `distance > threshold` check let such a query through and returned an arbitrary FAQ answer as if it were a confident match. `retrieval.search` therefore tests `not distance <= threshold`, which treats `NaN` as "no match" and falls back.
 
 ### 4. Orchestration — tying the three layers together
 
@@ -158,12 +211,72 @@ Every call, regardless of which layer answered, gets logged by `app/chat.py` int
 
 ## API surface
 
-| Endpoint | Purpose |
+Base URL `http://localhost:8000`, JSON in and out, interactive docs at `/docs`.
+
+| Endpoint | Purpose | Success |
+|---|---|---|
+| `GET /health` | Health check / pre-warm before a demo | `200 {"status": "ok"}` |
+| `GET /menu?day_of_week=` | Today's menu by default, or any weekday (0 = Monday ... 6 = Sunday) | `200`, a list of menu items |
+| `GET /hours` | The full weekly schedule | `200`, 7 entries ordered Monday to Sunday |
+| `POST /chat` `{"message": "..."}` | Runs the pipeline above and logs the exchange | `200 {reply, suggestions[], intent, source, message_id}` |
+| `PUT /chat/{message_id}/rating` `{"rating": 1 \| -1 \| null}` | Stores good / bad / cleared feedback on a logged reply | `204`, no body |
+
+```
+POST /chat  {"message": "is the food halal"}
+200         {"reply": "Yes. All meat served in the cafeteria is halal-certified.",
+             "suggestions": ["What's today's menu?", "What are your hours?", "I have some feedback"],
+             "intent": "faq", "source": "retrieval", "message_id": 54}
+
+PUT /chat/54/rating  {"rating": 1}   ->   204
+```
+
+`source` says which layer answered: `rule`, `classifier`, `retrieval` or `fallback`. Menu items carry `id, name, description, price, category, dietary_tags, day_of_week`; `price` is a decimal string such as `"140"`.
+
+### Errors and input validation
+
+Errors are JSON `{"detail": ...}`. A 422 names the field and the reason and never echoes what was sent.
+
+| Status | When |
 |---|---|
-| `GET /health` | Render health check / pre-warm before a demo |
-| `GET /menu?day_of_week=` | Today's menu by default, or any weekday |
-| `GET /hours` | The full weekly schedule |
-| `POST /chat {"message": "..."}` | Runs the pipeline above; returns `{reply, suggestions[], intent, source, message_id}` |
+| `404` | A rating for a `message_id` that doesn't exist |
+| `422` | `message` missing, not a string, longer than 1000 characters (the database column's limit) or containing a NUL byte; `rating` anything other than `1`, `-1` or `null` (`true`, `1.0` and `0` included); `message_id` below 1 or above 2,147,483,647; `day_of_week` outside 0-6 or not a number |
+
+A browser can only call the API from an origin listed in `CORS_ORIGINS`; other origins are refused.
+
+An independent black-box review of the running API (about 70 requests: every endpoint, malformed bodies, boundary values, CORS, injection and XSS strings, Unicode, parallel calls) found these cases, now fixed and covered by `tests/test_validation.py`: oversized, NUL-containing and lone-surrogate messages and out-of-range rating ids caused 500s; a query with no known words returned an arbitrary FAQ answer; and a greeting anywhere in a message hid the question after it. Injection and XSS strings were inert (replies never echo user input), Monday was handled correctly on every path, and 404/405 responses leak nothing. What it found and was deliberately left alone is listed under Known limitations.
+
+## Frontend
+
+`web/` is a Next.js 16 app (App Router, TypeScript, Tailwind 4) and a pure client of the API: no Next.js server code sits in the request path, the browser talks to FastAPI directly (which is why `CORS_ORIGINS` exists).
+
+### What it does
+
+- **ChatGPT-style layout.** `app/layout.tsx` wraps every page in `Shell`: a dark sidebar on the left (New chat, Recent chats) and the chat on the right. Clicking the logo hides or shows the sidebar; while it is hidden the logo stays in the top-left corner (turning into the panel icon on hover) so it can be brought back. On phones the sidebar is an overlay that starts closed.
+- **Thinking, then writing.** Sending a message shows your bubble and three pulsing dots for at least 3 seconds. The API call runs in parallel, so a slower API simply takes as long as it takes. The reply is then written out with GSAP, one character after another (first, second, third, ...) at about 20 ms apiece. A long reply is sped up so it never takes more than 4 seconds, and it appears instantly for people whose OS asks for reduced motion.
+- **Feedback.** Once the last character is in, thumbs-up and thumbs-down icons (lucide) fade in under the reply. A click stores `+1` / `-1` through `PUT /chat/{id}/rating`; clicking the same icon again clears it. The icon updates immediately and goes back if the request fails.
+- **Suggestions.** The `suggestions` the API returns show as chips under the latest reply; clicking one sends it.
+- **History.** Conversations are kept in the browser's `localStorage`. Past chats render instantly: only a reply that has just arrived is animated, and switching chats mid-reply never leaves the input locked.
+- **Errors.** If the API can't be reached, the same 3-second wait is followed by a red "couldn't reach the server" message (no feedback icons on it).
+- **Input.** Enter sends, Shift+Enter adds a line (an Enter that confirms an IME composition is ignored). The box grows with the text and is capped at 1000 characters, matching the database column.
+- **Accessibility.** Screen readers get the full reply at once instead of one letter at a time; the thinking state is announced; icon buttons have labels and `aria-pressed`; all motion is switched off under `prefers-reduced-motion`.
+
+### Where things live
+
+| File | Role |
+|---|---|
+| `components/Shell.tsx` | Sidebar + page frame; desktop push-aside vs. mobile overlay |
+| `components/ChatView.tsx` | Message list, input box, and the send flow: user bubble, API call, minimum thinking time, rating |
+| `components/BotMessage.tsx` | One bot reply: the GSAP typing animation, feedback icons, suggestion chips |
+| `lib/api.ts` | `sendChat` and `sendRating`; reads `NEXT_PUBLIC_API_URL` |
+| `lib/chats.ts` | Chat history in `localStorage`, plus the `pending` / `fresh` flags below |
+
+### A design detail worth knowing
+
+Whether a reply gets typed out is decided at the moment it is added to the chat. If that flag lived in separate React state, React could render the new message one frame *before* the flag arrives and the animation would be skipped. So `chats.ts` keeps `pending` (a chat is waiting for a reply) and `fresh` (this message is being typed) in the same small store as the messages, and `addMessage` updates all of them in one commit. The store is read with `useSyncExternalStore`, so the server render and the first client render are both empty and the saved chats appear without a hydration mismatch.
+
+### How it was checked
+
+`npm run lint`, `tsc --noEmit` and `npm run build` pass (Next's Cache Components validation included). In a real browser against the live API: the thinking pause measured 3.0 s; a 57-character reply typed in 1.08 s (about 19 ms per character, progressively 2, 7, 14, ... 50 of 57 visible); the feedback icons appeared 80 ms after the last character; a rating click reached Neon (`chat_messages.rating = 1`); toggling and clearing a rating worked; the API-down path showed the error message; leaving a chat mid-reply unlocked the input; the phone layout opened as an overlay; and there were no console errors or warnings.
 
 ## Evaluation
 
@@ -178,9 +291,21 @@ Retrieval doesn't get a second confusion matrix (the course wants one, clearly a
 - **Placeholder content.** `menu_seed.csv`, `hours_seed.csv`, `faq_seed.csv`, and `intents_train.csv` are all realistic-but-invented placeholders, not a real cafeteria's actual data. The training examples in particular are worth reviewing/extending with real phrasing before leaning on the confusion matrix too heavily in the report.
 - **Retrieval's own evaluation set (paraphrased queries, hit-rate@1) hasn't been written yet** — only the classifier has a finished evaluation pipeline so far.
 - **Single cafeteria, no accounts.** Anonymous chat, one location — both cheap assumptions to change later if they turn out to be wrong, not load-bearing design decisions.
-- **Next.js UI and Render deployment are separate, later rounds** — this covers the backend only.
+- **The rules layer is keyword-greedy.** It fires on any message containing words like `lunch`, `served`, `open` or `close`, so feedback such as "the lunch was amazing" or "I sat close to the window" gets a menu or hours answer instead of reaching the classifier (two `feedback` rows in `intents_train.csv` can never get there for this reason). Fixes when it matters: let rules fire only on question-shaped messages, or let the classifier decide first.
+- **Ramadan phrasing.** "Are your hours different during Ramadan" reaches the FAQ answer, but "what time do you open in ramadan" is let through by the rule and then routed by the classifier to the regular hours.
+- **The retrieval threshold is loose.** A cosine distance of 0.6 over a 61-word vocabulary means a question that only shares words like "the cafeteria" with an FAQ can match it ("can visitors eat at the cafeteria" returns the payment answer). Tune it against the paraphrase evaluation set once that exists.
+- **Server clock.** "Today" and "tomorrow" come from the server's local date. On a UTC host that is an hour behind Algeria (UTC+1), so between 00:00 and 01:00 local time the day is off by one; use `ZoneInfo("Africa/Algiers")` when deploying.
+- **Menu answers list the whole day.** "What's for lunch tomorrow" returns every meal (grouped alphabetically: breakfast, dinner, lunch), and "any veggie options" returns the full menu. Filtering by meal or dietary tag is a later improvement.
+- **No auth or rate limiting.** Anyone can call `/chat`, and with a sequential `message_id` anyone can overwrite a reply's rating. Fine for a course project; not for the open internet.
+- **The 3-second "thinking" pause is cosmetic.** The API answers in about a second; the frontend deliberately keeps the dots up for at least 3 s (`THINK_MS` in `web/components/ChatView.tsx`) so a reply feels generated. Set it to `0` to remove it.
+- **Chat history is per browser.** The sidebar's Recent list lives in `localStorage`; the backend is anonymous and has no notion of a conversation, so history doesn't follow you to another device or browser.
+- **Deployment is a later round.** Both halves run locally against Neon; putting the API on Render and the web app on a host is not done yet.
 
 ## Local setup
+
+You need Python 3.10+ (developed on 3.13), Node 20+ (developed on 24), and a Neon database (see "Database" below).
+
+### 1. Backend (`api/`)
 
 ```bash
 cd api
@@ -202,10 +327,48 @@ cp ../.env.example ../.env   # then paste your Neon connection string into DATAB
 
 The trained artifacts (`*.joblib`, `confusion_matrix.png`, `classification_report.txt`) are git-ignored, so a fresh clone has none of them -- the two `scripts.train_*` commands above generate them, and `scripts.seed_db` needs `retrieval.joblib` to exist first.
 
-Then: `GET /health`, `GET /menu`, `GET /hours`, `POST /chat {"message": "..."}`. Run the smoke test with `.venv/Scripts/python.exe -m pytest tests/test_pipeline.py`.
+The API is now on `http://localhost:8000` (FastAPI's interactive docs are at `/docs`). Run the tests with `.venv/Scripts/python.exe -m pytest tests`: `test_validation.py` is pure logic (no database); `test_pipeline.py` is the end-to-end smoke test and needs the migrated and seeded database above. Its requests only read; a `/chat` call, by contrast, logs a row to `chat_messages`.
+
+### 2. Frontend (`web/`)
+
+```bash
+cd web
+npm install
+npm run dev          # http://localhost:3000
+```
+
+The frontend calls the API straight from the browser. It looks for it at `http://localhost:8000`; to point somewhere else, copy `web/.env.example` to `web/.env.local` and set `NEXT_PUBLIC_API_URL`. The backend must allow the frontend's origin: `CORS_ORIGINS` in the root `.env` (default `http://localhost:3000`) — without it the browser blocks every API call.
+
+Checks before committing frontend changes: `npm run lint`, `npx tsc --noEmit`, `npm run build`.
+
+### Configuration
+
+| Variable | File | Default | Meaning |
+|---|---|---|---|
+| `DATABASE_URL` | root `.env` | none (required) | Neon connection string, `postgresql+psycopg://...` (see "Database") |
+| `CORS_ORIGINS` | root `.env` | `http://localhost:3000` | Comma-separated origins allowed to call the API from a browser |
+| `NEXT_PUBLIC_API_URL` | `web/.env.local` | `http://localhost:8000` | Where the frontend finds the API. It ends up in the browser bundle, so it is a URL, never a secret |
 
 ## Database
 
 The only database is [Neon](https://neon.tech) (hosted Postgres with pgvector) -- there is no local database to run. Local development and the deployed app both read the same `DATABASE_URL` env var. The `chat_messages` table is the evaluation audit trail, so to keep your test chats out of it, point local development at a Neon *branch* (an instant isolated copy) and leave the main branch to the deployed app.
 
 Neon's dashboard hands you a URL starting with `postgresql://`, but this app uses psycopg 3, so the prefix must be rewritten to `postgresql+psycopg://` (a bare `postgresql://` makes SQLAlchemy look for psycopg2, which isn't installed). Keep the `?sslmode=require&channel_binding=require` suffix as-is. Use Neon's direct/unpooled connection string, not the `-pooler` one (the dashboard defaults to pooled -- delete `-pooler` from the host) — nothing about this project's traffic needs connection pooling yet, and pooled connections are known to break prepared statements mid-seed. Neon needs the `vector` extension enabled, which the initial Alembic migration already does with `CREATE EXTENSION IF NOT EXISTS vector`.
+
+## Build history
+
+The project was built in stages, one commit and one push per stage, so `git log` reads as the build order:
+
+| Stage | What it added |
+|---|---|
+| 1 | Foundation: config, DB session, models, Alembic migration, queries, menu and hours seeds |
+| 2 | Rules layer: regex routing with direct DB lookup |
+| 3 | Intent classifier with a cross-validated evaluation |
+| 4 | FAQ retrieval (pgvector) and database seeding |
+| 5 | Pipeline orchestration and the FastAPI endpoints, with chat logging |
+| 6 | `PUT /chat/{id}/rating` for feedback |
+| 7 | Next.js scaffold and the API client |
+| 8 | ChatGPT-style layout, collapsible sidebar, working chat |
+| 9 | Thinking delay, GSAP typed replies, feedback icons |
+
+Smaller commits in between: the README, replacing local Docker with Neon, and the input-validation fixes from the API review.
