@@ -4,10 +4,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql+psycopg://cafeteria:cafeteria@localhost:5432/cafeteria",
-)
+# No fallback on purpose: with no local database anymore, a silent localhost default
+# would only turn a missing .env into a confusing "connection refused".
+DATABASE_URL = os.environ["DATABASE_URL"]
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
 
 # Tuned against cross-validated out-of-fold confidence, not guessed: on the

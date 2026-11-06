@@ -16,7 +16,7 @@ def _run(db, text, expected_source, expected_intent=None):
 
 
 def test_pipeline_smoke():
-    # Requires the local DB to be migrated and seeded (docker compose up, alembic
+    # Requires the Neon DB in DATABASE_URL to be migrated and seeded (alembic
     # upgrade head, train_retrieval + train_classifier + seed_db) -- this is an
     # integration smoke test, not a unit test with mocks.
     db = SessionLocal()

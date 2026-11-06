@@ -186,10 +186,9 @@ Retrieval doesn't get a second confusion matrix (the course wants one, clearly a
 cd api
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt
-cp ../.env.example ../.env   # then edit DATABASE_URL if needed
+cp ../.env.example ../.env   # then paste your Neon connection string into DATABASE_URL (see "Database" below)
 
-docker compose -f ../docker-compose.yml up -d     # local Postgres w/ pgvector
-.venv/Scripts/python.exe -m alembic upgrade head
+.venv/Scripts/python.exe -m alembic upgrade head      # creates the tables (and the vector extension) on Neon
 
 # -m, not a bare path -- these import the app package, which needs api/ on sys.path
 .venv/Scripts/python.exe -m scripts.train_retrieval    # fits FAQ embeddings -> artifacts/retrieval.joblib
@@ -205,6 +204,8 @@ The trained artifacts (`*.joblib`, `confusion_matrix.png`, `classification_repor
 
 Then: `GET /health`, `GET /menu`, `GET /hours`, `POST /chat {"message": "..."}`. Run the smoke test with `.venv/Scripts/python.exe -m pytest tests/test_pipeline.py`.
 
-## Production
+## Database
 
-Same `DATABASE_URL` env var, pointed at a Neon connection string instead of local Docker Postgres. Neon's dashboard hands you a URL starting with `postgresql://`, but this app uses psycopg 3, so the prefix must be rewritten to `postgresql+psycopg://` (a bare `postgresql://` makes SQLAlchemy look for psycopg2, which isn't installed). Keep the `?sslmode=require&channel_binding=require` suffix as-is. Use Neon's direct/unpooled connection string, not the `-pooler` one (the dashboard defaults to pooled -- delete `-pooler` from the host) — nothing about this project's traffic needs connection pooling yet, and pooled connections are known to break prepared statements mid-seed. Neon needs the `vector` extension enabled, which the initial Alembic migration already does with `CREATE EXTENSION IF NOT EXISTS vector`.
+The only database is [Neon](https://neon.tech) (hosted Postgres with pgvector) -- there is no local database to run. Local development and the deployed app both read the same `DATABASE_URL` env var. The `chat_messages` table is the evaluation audit trail, so to keep your test chats out of it, point local development at a Neon *branch* (an instant isolated copy) and leave the main branch to the deployed app.
+
+Neon's dashboard hands you a URL starting with `postgresql://`, but this app uses psycopg 3, so the prefix must be rewritten to `postgresql+psycopg://` (a bare `postgresql://` makes SQLAlchemy look for psycopg2, which isn't installed). Keep the `?sslmode=require&channel_binding=require` suffix as-is. Use Neon's direct/unpooled connection string, not the `-pooler` one (the dashboard defaults to pooled -- delete `-pooler` from the host) — nothing about this project's traffic needs connection pooling yet, and pooled connections are known to break prepared statements mid-seed. Neon needs the `vector` extension enabled, which the initial Alembic migration already does with `CREATE EXTENSION IF NOT EXISTS vector`.
