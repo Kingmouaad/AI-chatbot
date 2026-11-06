@@ -55,13 +55,21 @@ def match(text: str, db) -> RuleResult | None:
     if GREETING_RE.search(normalized):
         return RuleResult("Hi! Ask me about today's menu, our hours, ...", intent="greeting")
 
+    # `is None`, not `or`: Monday is 0, which is falsy, so `or` would silently
+    # answer "what's on Monday" with today's menu.
     if HOURS_RE.search(normalized):
-        day = resolve_day(normalized) or date.today().weekday()
-        return RuleResult(format_hours_reply(queries.get_hours_for_day(db, day), day), intent="hours_query")
+        day = resolve_day(normalized)
+        if day is None:
+            day = date.today().weekday()
+        hours = queries.get_hours_for_day(db, day)
+        return RuleResult(format_hours_reply(hours, day), intent="hours_query")
 
     if MENU_RE.search(normalized):
-        day = resolve_day(normalized) or date.today().weekday()
-        return RuleResult(format_menu_reply(queries.get_menu_for_day(db, day), day), intent="menu_query")
+        day = resolve_day(normalized)
+        if day is None:
+            day = date.today().weekday()
+        items = queries.get_menu_for_day(db, day)
+        return RuleResult(format_menu_reply(items, day), intent="menu_query")
 
     return None  # nothing matched -- fall through to the classifier
 ```
@@ -191,10 +199,12 @@ docker compose -f ../docker-compose.yml up -d     # local Postgres w/ pgvector
 .venv/Scripts/python.exe -m uvicorn app.main:app --reload
 ```
 
-(Commands above work as-is in Git Bash/WSL. In PowerShell, use `.venv\Scripts\python.exe` instead.)
+(Commands above work as-is in Git Bash on Windows. In PowerShell, use `.venv\Scripts\python.exe` instead. On Linux, macOS, or WSL the venv puts the interpreter at `.venv/bin/python`, so swap that in.)
+
+The trained artifacts (`*.joblib`, `confusion_matrix.png`, `classification_report.txt`) are git-ignored, so a fresh clone has none of them -- the two `scripts.train_*` commands above generate them, and `scripts.seed_db` needs `retrieval.joblib` to exist first.
 
 Then: `GET /health`, `GET /menu`, `GET /hours`, `POST /chat {"message": "..."}`. Run the smoke test with `.venv/Scripts/python.exe -m pytest tests/test_pipeline.py`.
 
 ## Production
 
-Same `DATABASE_URL` env var, pointed at a Neon connection string instead of local Docker Postgres. Use Neon's direct/unpooled connection string, not the `-pooler` one — nothing about this project's traffic needs connection pooling yet, and pooled connections are known to break prepared statements mid-seed. Neon needs the `vector` extension enabled, which the initial Alembic migration already does with `CREATE EXTENSION IF NOT EXISTS vector`.
+Same `DATABASE_URL` env var, pointed at a Neon connection string instead of local Docker Postgres. Neon's dashboard hands you a URL starting with `postgresql://`, but this app uses psycopg 3, so the prefix must be rewritten to `postgresql+psycopg://` (a bare `postgresql://` makes SQLAlchemy look for psycopg2, which isn't installed). Keep the `?sslmode=require&channel_binding=require` suffix as-is. Use Neon's direct/unpooled connection string, not the `-pooler` one (the dashboard defaults to pooled -- delete `-pooler` from the host) — nothing about this project's traffic needs connection pooling yet, and pooled connections are known to break prepared statements mid-seed. Neon needs the `vector` extension enabled, which the initial Alembic migration already does with `CREATE EXTENSION IF NOT EXISTS vector`.
