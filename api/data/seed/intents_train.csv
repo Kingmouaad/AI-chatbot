@@ -1,0 +1,127 @@
+text,intent
+what's cooking today,menu_query
+any veggie options today,menu_query
+what's on the menu for lunch,menu_query
+is there chicken today,menu_query
+what are we eating tomorrow,menu_query
+what's for dinner tonight,menu_query
+is there dessert today,menu_query
+what's today's special,menu_query
+any fish on the menu this week,menu_query
+what's breakfast today,menu_query
+is couscous on the menu today,menu_query
+what's served for lunch tomorrow,menu_query
+any pasta today,menu_query
+what's the soup of the day,menu_query
+is there salad today,menu_query
+what meals are available today,menu_query
+what's on offer for breakfast,menu_query
+today's lunch menu please,menu_query
+what dish is being served now,menu_query
+is there rice today,menu_query
+what's cooking for dinner,menu_query
+any grilled chicken today,menu_query
+what's the lunch special today,menu_query
+is there soup for dinner tonight,menu_query
+what's available to eat right now,menu_query
+what's the breakfast menu tomorrow,menu_query
+are you open right now,hours_query
+what time do you close today,hours_query
+when do you open tomorrow,hours_query
+are you open on weekends,hours_query
+what time does the cafeteria close,hours_query
+is the cafeteria open now,hours_query
+when does breakfast service start,hours_query
+what are your opening hours,hours_query
+are you open on fridays,hours_query
+what time do you open in the morning,hours_query
+is the cafeteria open late,hours_query
+when do you close for dinner,hours_query
+are you open during exam week,hours_query
+what hours are you open today,hours_query
+is the cafeteria open on holidays,hours_query
+when does lunch service end,hours_query
+what time do doors open,hours_query
+are you closed today,hours_query
+is the cafeteria open all day,hours_query
+what time do you shut down,hours_query
+when can i get breakfast,hours_query
+are you open before 8am,hours_query
+what's the closing time tonight,hours_query
+is the kitchen open now,hours_query
+when do you reopen after the break,hours_query
+how can i pay at the cafeteria,faq
+do you accept credit cards,faq
+i lost my meal card what do i do,faq
+is the food halal,faq
+do you cater to vegetarians,faq
+can you accommodate food allergies,faq
+where is the cafeteria located,faq
+how do i file a complaint,faq
+can i get a refund for unused credit,faq
+is there a student discount,faq
+are hours different during ramadan,faq
+is the cafeteria wheelchair accessible,faq
+how many people can the cafeteria seat,faq
+who do i contact about a lost item,faq
+do you offer takeaway containers,faq
+is there a vegan option available,faq
+how do i top up my meal card,faq
+do you take cash,faq
+what's your policy on food allergies,faq
+can visitors eat at the cafeteria,faq
+is there a dress code for the cafeteria,faq
+how do i report a hygiene issue,faq
+can i order food in advance,faq
+do you have a nutrition information sheet,faq
+is outside food allowed inside,faq
+the food was amazing today,feedback
+my lunch was cold when i got it,feedback
+the staff were really friendly,feedback
+i waited 40 minutes to get served,feedback
+the soup was too salty,feedback
+great service today thank you,feedback
+the tables were dirty when i sat down,feedback
+i really enjoyed the couscous,feedback
+the line was way too long at lunch,feedback
+thanks for adding more vegetarian options,feedback
+my food was undercooked,feedback
+the new menu is a big improvement,feedback
+service was slow today,feedback
+i found a hair in my food,feedback
+the portions have gotten smaller,feedback
+really happy with the quality lately,feedback
+the cashier was rude to me,feedback
+the cafeteria smelled bad today,feedback
+loved the dessert today,feedback
+my order was wrong,feedback
+the new seating area is nice,feedback
+the drinks machine is broken,feedback
+great job on the ramadan menu,feedback
+i got sick after eating here,feedback
+the air conditioning isn't working in the dining hall,feedback
+what's the weather like today,out_of_scope
+tell me a joke,out_of_scope
+who won the football match last night,out_of_scope
+can you help me with my math homework,out_of_scope
+what time is it,out_of_scope
+how do i reset my student portal password,out_of_scope
+what's the capital of france,out_of_scope
+can you write my essay for me,out_of_scope
+what's the wifi password,out_of_scope
+where's the library,out_of_scope
+how do i register for next semester,out_of_scope
+what's the exam schedule,out_of_scope
+can you recommend a movie,out_of_scope
+how's the weather tomorrow,out_of_scope
+what's 2 plus 2,out_of_scope
+tell me about the news today,out_of_scope
+where do i park my car,out_of_scope
+how do i contact my professor,out_of_scope
+what's playing at the cinema,out_of_scope
+can you translate this sentence,out_of_scope
+who is the president,out_of_scope
+where's the nearest atm,out_of_scope
+what's the bus schedule,out_of_scope
+can you set a reminder for me,out_of_scope
+sing me a song,out_of_scope
