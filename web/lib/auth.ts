@@ -10,6 +10,12 @@ const pool = (g.authPool ??= new Pool({ connectionString: process.env.DATABASE_U
 export const auth = betterAuth({
   database: pool,
   emailAndPassword: { enabled: true },
+  // Vercel serves the same deployment on several hostnames (production alias, branch alias,
+  // per-deployment URL). Better Auth rejects any origin that isn't listed, so list them all.
+  // Google sign-in still only works on the host registered in Google Cloud (BETTER_AUTH_URL).
+  trustedOrigins: [process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_BRANCH_URL, process.env.VERCEL_URL]
+    .filter((host): host is string => Boolean(host))
+    .map((host) => `https://${host}`),
   // Added only when configured, so the app still boots without Google credentials.
   socialProviders: process.env.GOOGLE_CLIENT_ID
     ? { google: { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET! } }
