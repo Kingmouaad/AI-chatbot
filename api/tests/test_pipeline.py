@@ -29,6 +29,10 @@ def test_pipeline_smoke():
         # avoids every rule keyword so it actually exercises the classifier path.
         _run(db, "when do you reopen after the break", "classifier", "hours_query")
         _run(db, "is the food halal", "retrieval", "faq")
+        # the same question is worded for who asks: students keep the stored answer, outsiders don't
+        student = pipeline.handle(db, "is there a student discount", "student").reply
+        outsider = pipeline.handle(db, "is there a student discount", "outsider").reply
+        assert "Visitors" in outsider and "Visitors" not in student, (student, outsider)
         _run(db, "the food was amazing today", "classifier", "feedback")
         _run(db, "what's the capital of france", "fallback")
     finally:

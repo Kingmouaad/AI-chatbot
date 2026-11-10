@@ -56,3 +56,10 @@ def test_rating_accepts_good_bad_or_clear(ok):
 )
 def test_greeting_rule_only_matches_a_bare_greeting(text, is_greeting):
     assert bool(GREETING_RE.search(text.lower().strip())) is is_greeting
+
+
+def test_role_defaults_to_outsider_and_rejects_unknown_values():
+    assert ChatRequest(message="hi").role == "outsider"
+    assert ChatRequest(message="hi", role="student").role == "student"
+    with pytest.raises(ValidationError):
+        ChatRequest(message="hi", role="admin")

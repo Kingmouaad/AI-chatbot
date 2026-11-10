@@ -1,7 +1,9 @@
 "use client";
 
-import { ChefHat, PanelLeft, SquarePen } from "lucide-react";
+import { PanelLeft, SquarePen } from "lucide-react";
 import { useState } from "react";
+import Logo from "@/components/Logo";
+import UserMenu from "@/components/UserMenu";
 import { selectChat, useChats } from "@/lib/chats";
 
 // Clicking the logo shows/hides the sidebar. On hover the logo turns into the panel icon so it
@@ -11,9 +13,9 @@ function LogoButton({ onClick }: { onClick: () => void }) {
     <button
       onClick={onClick}
       aria-label="Toggle sidebar"
-      className="group grid size-10 shrink-0 place-items-center rounded-xl text-amber-400 hover:bg-hover"
+      className="group grid size-10 shrink-0 place-items-center rounded-xl hover:bg-hover"
     >
-      <ChefHat className="size-6 group-hover:hidden" />
+      <Logo size={32} className="group-hover:hidden" />
       <PanelLeft className="hidden size-5 text-muted group-hover:block" />
     </button>
   );
@@ -84,10 +86,15 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col bg-main">
-        {/* the logo stays reachable while the sidebar is hidden */}
-        <div className={`p-2 ${mobileOpen ? "hidden" : "flex"} ${desktopOpen ? "md:hidden" : "md:flex"}`}>
-          <LogoButton onClick={toggle} />
-        </div>
+        {/* top bar: the logo stays reachable while the sidebar is hidden; account menu on the right */}
+        <header className="flex items-center justify-between p-2">
+          <div className={`${mobileOpen ? "hidden" : "flex"} ${desktopOpen ? "md:hidden" : "md:flex"}`}>
+            <LogoButton onClick={toggle} />
+          </div>
+          <div className="ml-auto">
+            <UserMenu />
+          </div>
+        </header>
         {children}
       </div>
     </div>

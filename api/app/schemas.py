@@ -27,7 +27,12 @@ class OpeningHoursOut(BaseModel):
     note: str | None
 
 
+Role = Literal["student", "teacher", "worker", "outsider"]
+
+
 class ChatRequest(BaseModel):
+    # Who is asking, as declared in the user's profile. Anyone who doesn't say is an outsider.
+    role: Role = "outsider"
     # 1000 matches the chat_messages.user_message column; anything longer would only fail at
     # insert time as a 500 instead of a clean 422.
     message: str = Field(max_length=1000)

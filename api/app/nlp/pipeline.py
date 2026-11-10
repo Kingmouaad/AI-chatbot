@@ -13,6 +13,20 @@ FEEDBACK_ACK = "Thanks for letting us know -- I've passed this along."
 SUGGESTIONS = ["What's today's menu?", "What are your hours?", "I have some feedback"]
 
 
+# FAQ answers that depend on who is asking, keyed by the stored FAQ question. A role with no entry
+# gets the stored answer as-is. The policies are placeholders like the rest of the seed data.
+ROLE_ANSWERS = {
+    "Is there a student discount?": {
+        "teacher": "The discounted meal price is for students. Teachers pay the staff price at checkout.",
+        "worker": "The discounted meal price is for students. University staff pay the staff price at checkout.",
+        "outsider": "The discounted meal price is for students only. Visitors pay the full price.",
+    },
+    "How can I pay at the cafeteria?": {
+        "outsider": "Visitors can pay in cash at the counter. The student meal card is for students and university staff only.",
+    },
+}
+
+
 @dataclass
 class ChatResult:
     reply: str
@@ -28,7 +42,7 @@ def _resolved_day(text: str) -> int:
     return day if day is not None else queries.today_day_of_week()
 
 
-def handle(db: Session, text: str) -> ChatResult:
+def handle(db: Session, text: str, role: str = "outsider") -> ChatResult:
     rule_hit = rules.match(text, db)
     if rule_hit is not None:
         return ChatResult(reply=rule_hit.reply, intent=rule_hit.intent, source="rule")
@@ -52,7 +66,7 @@ def handle(db: Session, text: str) -> ChatResult:
         chunk, distance = retrieval.search(db, text)
         if chunk is not None:
             return ChatResult(
-                chunk.answer,
+                ROLE_ANSWERS.get(chunk.question, {}).get(role, chunk.answer),
                 intent,
                 "retrieval",
                 classifier_confidence=confidence,

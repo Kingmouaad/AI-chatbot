@@ -31,11 +31,22 @@ type State = {
   fresh: string | null; // id of the bot message currently being typed out (not persisted)
 };
 
-const KEY = "cafeteriaai.chats";
+let KEY = "cafeteriaai.chats";
 const SERVER_STATE: State = { chats: [], activeId: null, pending: null, fresh: null };
 
 let state: State | null = null;
 const listeners = new Set<() => void>();
+
+/**
+ * Chat history is stored per account. Called by AuthGate before any chat UI mounts (so there are
+ * no subscribers to notify); a different account starts from its own saved chats.
+ */
+export function setChatOwner(userId: string) {
+  const key = `cafeteriaai.chats.${userId}`;
+  if (key === KEY) return;
+  KEY = key;
+  state = null;
+}
 
 function load(): Chat[] {
   try {

@@ -13,7 +13,7 @@ router = APIRouter()
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest, db: Session = Depends(get_db)):
-    result = pipeline.handle(db, request.message)
+    result = pipeline.handle(db, request.message, request.role)
 
     message = ChatMessage(
         user_message=request.message,

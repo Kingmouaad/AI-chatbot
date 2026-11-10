@@ -12,11 +12,13 @@ export type ChatReply = {
 
 export type Rating = 1 | -1 | null;
 
-export async function sendChat(message: string): Promise<ChatReply> {
+// `role` is the signed-in user's self-declared role (student | teacher | worker | outsider); the API
+// uses it to word the few answers that depend on who is asking.
+export async function sendChat(message: string, role: string): Promise<ChatReply> {
   const res = await fetch(`${API_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, role }),
   });
   if (!res.ok) throw new Error(`POST /chat failed: ${res.status}`);
   return res.json();

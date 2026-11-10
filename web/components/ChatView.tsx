@@ -1,9 +1,11 @@
 "use client";
 
-import { ArrowUp, ChefHat } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import BotMessage, { Avatar } from "@/components/BotMessage";
+import Logo from "@/components/Logo";
 import { type Rating, sendChat, sendRating } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 import { addMessage, type BotMsg, setRating, uid, useChats } from "@/lib/chats";
 
 const STARTERS = ["What's today's menu?", "What are your hours?", "Is the food halal?"];
@@ -19,6 +21,8 @@ export default function ChatView() {
   const { chats, activeId, pending, fresh } = useChats();
   const messages = chats.find((c) => c.id === activeId)?.messages ?? [];
   const [input, setInput] = useState("");
+  // Everyone is an outsider until they say otherwise (Google sign-ups included) -- see Profile.
+  const role = authClient.useSession().data?.user.role ?? "outsider";
   const busy = pending !== null || fresh !== null; // waiting for a reply, or still typing one out
   const thinking = pending !== null && pending === activeId;
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -49,7 +53,7 @@ export default function ChatView() {
     if (!message || busy) return;
     setInput("");
     const chatId = addMessage(activeId, { id: uid(), role: "user", text: message });
-    const [reply] = await Promise.all([sendChat(message).catch(() => null), sleep(THINK_MS)]);
+    const [reply] = await Promise.all([sendChat(message, role).catch(() => null), sleep(THINK_MS)]);
     addMessage(
       chatId,
       reply
@@ -77,9 +81,7 @@ export default function ChatView() {
         <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 px-4 py-6">
           {messages.length === 0 ? (
             <div className="m-auto flex flex-col items-center gap-6 text-center">
-              <div className="grid size-12 place-items-center rounded-full bg-amber-400/15 text-amber-400">
-                <ChefHat className="size-6" />
-              </div>
+              <Logo size={120} />
               <h1 className="text-2xl font-semibold">How can I help you today?</h1>
               <div className="flex flex-wrap justify-center gap-2">
                 {STARTERS.map((s) => (
@@ -142,8 +144,9 @@ export default function ChatView() {
           send(input);
         }}
       >
-        <div className="flex items-end gap-2 rounded-3xl bg-surface py-2 pr-2 pl-5">
-          <textarea
+        <div className="glow-border">
+          <div className="flex items-end gap-2 rounded-3xl bg-surface py-2 pr-2 pl-5">
+            <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -164,10 +167,11 @@ export default function ChatView() {
             type="submit"
             disabled={!input.trim() || busy}
             aria-label="Send message"
-            className="grid size-9 shrink-0 place-items-center rounded-full bg-ink text-main transition-opacity disabled:opacity-30"
+            className="grid size-9 shrink-0 place-items-center rounded-full bg-ink text-main transition-opacity enabled:hover:bg-gold disabled:opacity-30"
           >
             <ArrowUp className="size-5" />
           </button>
+        </div>
         </div>
         <p className="pt-2 text-center text-xs text-muted">Cafeteria AI answers in English and can make mistakes.</p>
       </form>

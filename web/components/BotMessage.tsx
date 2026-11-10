@@ -1,8 +1,9 @@
 "use client";
 
 import gsap from "gsap";
-import { ChefHat, ThumbsDown, ThumbsUp } from "lucide-react";
+import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import Logo from "@/components/Logo";
 import { finishTyping, type BotMsg } from "@/lib/chats";
 
 const CHAR_DELAY = 0.02; // seconds between one character appearing and the next
@@ -10,8 +11,8 @@ const MAX_TYPING = 4; // a long reply is sped up so it never takes longer than t
 
 export function Avatar() {
   return (
-    <div className="grid size-8 shrink-0 place-items-center rounded-full bg-amber-400/15 text-amber-400">
-      <ChefHat className="size-4" />
+    <div className="grid size-8 shrink-0 place-items-center">
+      <Logo size={32} />
     </div>
   );
 }
