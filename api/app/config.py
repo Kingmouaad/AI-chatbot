@@ -1,5 +1,6 @@
 import os
 
+import certifi
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,6 +11,11 @@ _url = os.environ["DATABASE_URL"]
 # The web app (node-postgres) needs "postgresql://", this app (psycopg 3) needs "postgresql+psycopg://".
 # Accept either so Vercel can share one DATABASE_URL between both services.
 DATABASE_URL = _url.replace("postgresql://", "postgresql+psycopg://", 1) if _url.startswith("postgresql://") else _url
+# The web app's URL says sslmode=verify-full, which libpq only honours with a root-certificate file on
+# disk -- Vercel has none, so every query failed. Give it certifi's CA bundle (Neon's cert is public-CA
+# signed); verification stays on.
+if "sslmode=verify-" in DATABASE_URL and "sslrootcert" not in DATABASE_URL:
+    DATABASE_URL += f"&sslrootcert={certifi.where()}"
 
 # On Vercel both services share one domain and this one is reached under /backend (see vercel.json);
 # Vercel passes the request path through unchanged, so the routes must carry that prefix themselves.
