@@ -1,11 +1,9 @@
+# Runtime dependencies only: this file is what Vercel installs for the API.
 fastapi
-uvicorn[standard]
 sqlalchemy>=2.0
 psycopg[binary]
-alembic
 pgvector
-scikit-learn
+# pinned: classifier.joblib / retrieval.joblib are pickles and must be loaded by the version that wrote them
+scikit-learn==1.9.1
 joblib
-matplotlib
 python-dotenv
-pytest

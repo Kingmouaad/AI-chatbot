@@ -6,7 +6,15 @@ load_dotenv()
 
 # No fallback on purpose: with no local database anymore, a silent localhost default
 # would only turn a missing .env into a confusing "connection refused".
-DATABASE_URL = os.environ["DATABASE_URL"]
+_url = os.environ["DATABASE_URL"]
+# The web app (node-postgres) needs "postgresql://", this app (psycopg 3) needs "postgresql+psycopg://".
+# Accept either so Vercel can share one DATABASE_URL between both services.
+DATABASE_URL = _url.replace("postgresql://", "postgresql+psycopg://", 1) if _url.startswith("postgresql://") else _url
+
+# On Vercel both services share one domain and this one is reached under /backend (see vercel.json);
+# Vercel passes the request path through unchanged, so the routes must carry that prefix themselves.
+# Locally uvicorn serves them at the root.
+API_PREFIX = "/backend" if os.environ.get("VERCEL") else ""
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")]
 
 # Tuned against cross-validated out-of-fold confidence, not guessed: on the

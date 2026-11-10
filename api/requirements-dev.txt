@@ -1,0 +1,6 @@
+# Local development: the runtime set plus the server, migrations, evaluation plots and tests.
+-r requirements.txt
+uvicorn[standard]
+alembic
+matplotlib
+pytest

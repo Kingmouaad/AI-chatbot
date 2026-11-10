@@ -5,7 +5,7 @@ A text chat assistant for a university campus cafeteria: ask about today's menu,
 | Part | What it is | Built with |
 |---|---|---|
 | `api/` | The backend: the three-layer reply pipeline, the REST API, the evaluation scripts | Python, FastAPI, SQLAlchemy, scikit-learn, pgvector |
-| `web/` | The frontend: chat UI with a collapsible sidebar, a "thinking" pause, GSAP typed-out replies and feedback icons | Next.js 16, React 19, TypeScript, Tailwind 4, GSAP, lucide-react |
+| `web/` | The frontend: login/sign-up, chat UI with a collapsible sidebar, a "thinking" pause, GSAP typed-out replies, feedback icons, profile page | Next.js 16, React 19, TypeScript, Tailwind 4, GSAP, lucide-react, Better Auth |
 | Neon | The database: hosted Postgres with the `vector` extension | Postgres 18 |
 
 This doc explains what exists, why each piece is shaped the way it is, and shows the one function that does the real work at each stage.
@@ -32,6 +32,7 @@ cafeteriaai/
 │   ├── components/          Shell (sidebar), ChatView (input + messages), BotMessage (typing + feedback)
 │   └── lib/                 api.ts (backend client), chats.ts (chat history store)
 ├── .env.example             DATABASE_URL and CORS_ORIGINS for the backend
+├── vercel.json              Vercel multi-service config: api/ (FastAPI) + web/ (Next.js) on one domain
 └── README.md
 ```
 
@@ -247,11 +248,12 @@ An independent black-box review of the running API (about 70 requests: every end
 
 ## Frontend
 
-`web/` is a Next.js 16 app (App Router, TypeScript, Tailwind 4) and a pure client of the API: no Next.js server code sits in the request path, the browser talks to FastAPI directly (which is why `CORS_ORIGINS` exists).
+`web/` is a Next.js 16 app (App Router, TypeScript, Tailwind 4). Chat goes browser -> FastAPI directly (which is why `CORS_ORIGINS` exists); the only Next.js server code is Better Auth's `/api/auth/*` handler (see Accounts and roles).
 
 ### What it does
 
 - **ChatGPT-style layout.** `app/layout.tsx` wraps every page in `Shell`: a dark sidebar on the left (New chat, Recent chats) and the chat on the right. Clicking the logo hides or shows the sidebar; while it is hidden the logo stays in the top-left corner (turning into the panel icon on hover) so it can be brought back. On phones the sidebar is an overlay that starts closed.
+- **Gold styling.** Every button gets a gold ring, glow and a light sweep on hover (`globals.css`, opt out with `no-gold`); the message box has a golden border with a light travelling around it (`glow-border`). The mascot logo (`public/logo.png`) is used in the sidebar, avatar, auth page and favicon.
 - **Thinking, then writing.** Sending a message shows your bubble and three pulsing dots for at least 3 seconds. The API call runs in parallel, so a slower API simply takes as long as it takes. The reply is then written out with GSAP, one character after another (first, second, third, ...) at about 20 ms apiece. A long reply is sped up so it never takes more than 4 seconds, and it appears instantly for people whose OS asks for reduced motion.
 - **Feedback.** Once the last character is in, thumbs-up and thumbs-down icons (lucide) fade in under the reply. A click stores `+1` / `-1` through `PUT /chat/{id}/rating`; clicking the same icon again clears it. The icon updates immediately and goes back if the request fails.
 - **Suggestions.** The `suggestions` the API returns show as chips under the latest reply; clicking one sends it.
@@ -260,11 +262,23 @@ An independent black-box review of the running API (about 70 requests: every end
 - **Input.** Enter sends, Shift+Enter adds a line (an Enter that confirms an IME composition is ignored). The box grows with the text and is capped at 1000 characters, matching the database column.
 - **Accessibility.** Screen readers get the full reply at once instead of one letter at a time; the thinking state is announced; icon buttons have labels and `aria-pressed`; all motion is switched off under `prefers-reduced-motion`.
 
+### Accounts and roles
+
+Sign-in uses [Better Auth](https://www.better-auth.com) inside the Next.js app, storing users in the same Neon database (tables `user`, `session`, `account`, `verification`, created by `web/scripts/migrate-auth.mjs`; Alembic doesn't know about them).
+
+- **`/auth`**: one page with Log in / Sign up tabs, email + password, and "Continue with Google". Sign-up has an "I am a..." select: Student, Teacher, University worker, Outsider.
+- **Google users are Outsiders.** The `role` column defaults to `outsider`, and Google gives us no way to ask, so they change it in Profile settings.
+- **Top-right account menu** (avatar): Profile settings and Log out. **`/profile`** edits name and role.
+- **The role reaches the bot.** `sendChat` includes `role` and `POST /chat` accepts `student | teacher | worker | outsider` (default `outsider`). Today it changes the wording of two FAQ answers (student discount, how to pay) via `ROLE_ANSWERS` in `api/app/nlp/pipeline.py`; every other answer is the same for everyone.
+- **Gate.** `proxy.ts` redirects visitors with no session cookie to `/auth`; `AuthGate` does the real session check. Chat history in `localStorage` is stored per account.
+
 ### Where things live
 
 | File | Role |
 |---|---|
-| `components/Shell.tsx` | Sidebar + page frame; desktop push-aside vs. mobile overlay |
+| `components/Shell.tsx` | Sidebar + top bar + page frame; desktop push-aside vs. mobile overlay |
+| `components/AuthForm.tsx`, `ProfileForm.tsx`, `UserMenu.tsx`, `AuthGate.tsx` | Login/sign-up page, profile page, account dropdown, signed-in gate |
+| `lib/auth.ts`, `lib/auth-client.ts`, `lib/roles.ts` | Better Auth server config, browser client, the four roles |
 | `components/ChatView.tsx` | Message list, input box, and the send flow: user bubble, API call, minimum thinking time, rating |
 | `components/BotMessage.tsx` | One bot reply: the GSAP typing animation, feedback icons, suggestion chips |
 | `lib/api.ts` | `sendChat` and `sendRating`; reads `NEXT_PUBLIC_API_URL` |
@@ -290,16 +304,18 @@ Retrieval doesn't get a second confusion matrix (the course wants one, clearly a
 - **No generative model anywhere.** Every reply is either a template filled from the DB or a retrieved FAQ answer verbatim. More natural-sounding, LLM-generated replies were considered and explicitly rejected for v1 (cost, latency, hallucination risk, and harder to evaluate).
 - **Placeholder content.** `menu_seed.csv`, `hours_seed.csv`, `faq_seed.csv`, and `intents_train.csv` are all realistic-but-invented placeholders, not a real cafeteria's actual data. The training examples in particular are worth reviewing/extending with real phrasing before leaning on the confusion matrix too heavily in the report.
 - **Retrieval's own evaluation set (paraphrased queries, hit-rate@1) hasn't been written yet** — only the classifier has a finished evaluation pipeline so far.
-- **Single cafeteria, no accounts.** Anonymous chat, one location — both cheap assumptions to change later if they turn out to be wrong, not load-bearing design decisions.
+- **Single cafeteria.** One location — both cheap assumptions to change later if they turn out to be wrong, not load-bearing design decisions.
 - **The rules layer is keyword-greedy.** It fires on any message containing words like `lunch`, `served`, `open` or `close`, so feedback such as "the lunch was amazing" or "I sat close to the window" gets a menu or hours answer instead of reaching the classifier (two `feedback` rows in `intents_train.csv` can never get there for this reason). Fixes when it matters: let rules fire only on question-shaped messages, or let the classifier decide first.
 - **Ramadan phrasing.** "Are your hours different during Ramadan" reaches the FAQ answer, but "what time do you open in ramadan" is let through by the rule and then routed by the classifier to the regular hours.
 - **The retrieval threshold is loose.** A cosine distance of 0.6 over a 61-word vocabulary means a question that only shares words like "the cafeteria" with an FAQ can match it ("can visitors eat at the cafeteria" returns the payment answer). Tune it against the paraphrase evaluation set once that exists.
 - **Server clock.** "Today" and "tomorrow" come from the server's local date. On a UTC host that is an hour behind Algeria (UTC+1), so between 00:00 and 01:00 local time the day is off by one; use `ZoneInfo("Africa/Algiers")` when deploying.
 - **Menu answers list the whole day.** "What's for lunch tomorrow" returns every meal (grouped alphabetically: breakfast, dinner, lunch), and "any veggie options" returns the full menu. Filtering by meal or dietary tag is a later improvement.
-- **No auth or rate limiting.** Anyone can call `/chat`, and with a sequential `message_id` anyone can overwrite a reply's rating. Fine for a course project; not for the open internet.
+- **Roles are self-declared and unverified.** Anyone can pick "Student", and the API trusts the `role` the browser sends (it doesn't check the Better Auth session), so a script can claim any role. Fine while it only rewords two answers; verify the session in FastAPI before it gates anything real.
+- **No rate limiting on the API.** Anyone can call `/chat`, and with a sequential `message_id` anyone can overwrite a reply's rating. Fine for a course project; not for the open internet.
+- **Google sign-in needs your own credentials** (see `web/.env.example`); it was not exercised end to end because they aren't configured here. Email sign-up, login and role change were tested.
 - **The 3-second "thinking" pause is cosmetic.** The API answers in about a second; the frontend deliberately keeps the dots up for at least 3 s (`THINK_MS` in `web/components/ChatView.tsx`) so a reply feels generated. Set it to `0` to remove it.
-- **Chat history is per browser.** The sidebar's Recent list lives in `localStorage`; the backend is anonymous and has no notion of a conversation, so history doesn't follow you to another device or browser.
-- **Deployment is a later round.** Both halves run locally against Neon; putting the API on Render and the web app on a host is not done yet.
+- **Chat history is per browser.** The sidebar's Recent list lives in `localStorage`; the backend has no notion of a conversation or a user's chats, so history doesn't follow you to another device or browser.
+- **Deployment config is untested.** `vercel.json` follows Vercel's Services docs but has not been deployed yet; see Deploying to Vercel for what to check on the first deploy.
 
 ## Local setup
 
@@ -310,7 +326,7 @@ You need Python 3.10+ (developed on 3.13), Node 20+ (developed on 24), and a Neo
 ```bash
 cd api
 python -m venv .venv
-.venv/Scripts/python.exe -m pip install -r requirements.txt
+.venv/Scripts/python.exe -m pip install -r requirements-dev.txt   # requirements.txt is the runtime subset Vercel installs
 cp ../.env.example ../.env   # then paste your Neon connection string into DATABASE_URL (see "Database" below)
 
 .venv/Scripts/python.exe -m alembic upgrade head      # creates the tables (and the vector extension) on Neon
@@ -334,7 +350,9 @@ The API is now on `http://localhost:8000` (FastAPI's interactive docs are at `/d
 ```bash
 cd web
 npm install
-npm run dev          # http://localhost:3000
+cp .env.example .env.local                           # fill in DATABASE_URL and BETTER_AUTH_SECRET (and Google keys, optional)
+node --env-file=.env.local scripts/migrate-auth.mjs  # once: creates the auth tables on Neon
+npm run dev                                          # http://localhost:3000
 ```
 
 The frontend calls the API straight from the browser. It looks for it at `http://localhost:8000`; to point somewhere else, copy `web/.env.example` to `web/.env.local` and set `NEXT_PUBLIC_API_URL`. The backend must allow the frontend's origin: `CORS_ORIGINS` in the root `.env` (default `http://localhost:3000`) — without it the browser blocks every API call.
@@ -348,6 +366,31 @@ Checks before committing frontend changes: `npm run lint`, `npx tsc --noEmit`, `
 | `DATABASE_URL` | root `.env` | none (required) | Neon connection string, `postgresql+psycopg://...` (see "Database") |
 | `CORS_ORIGINS` | root `.env` | `http://localhost:3000` | Comma-separated origins allowed to call the API from a browser |
 | `NEXT_PUBLIC_API_URL` | `web/.env.local` | `http://localhost:8000` | Where the frontend finds the API. It ends up in the browser bundle, so it is a URL, never a secret |
+| `DATABASE_URL` | `web/.env.local` | none (required) | Same Neon database, but `postgresql://` (node-postgres), see `web/.env.example` |
+| `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | `web/.env.local` | none (required) | Signs sessions; the site's own URL |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `web/.env.local` | empty | Optional; without them the Google button reports an error |
+
+## Deploying to Vercel
+
+One Vercel project, two services (`vercel.json`), one domain:
+
+| Path | Service | Notes |
+|---|---|---|
+| `/backend/*` | `api` (`api/`, FastAPI) | Vercel passes the path through unchanged, so when the `VERCEL` env var is set `app/config.py` mounts every route under `/backend` (`/backend/chat`, `/backend/docs`, ...). Locally there is no prefix. |
+| everything else, including `/api/auth/*` | `web` (`web/`, Next.js) | Better Auth lives here, which is why the API is *not* under `/api`. |
+
+No service-to-service bindings: the browser calls `/backend/*` itself (`web/.env.production` sets `NEXT_PUBLIC_API_URL=/backend`, and being same-origin it needs no CORS), and neither service calls the other from the server.
+
+Set these in the Vercel project (Settings > Environment Variables; they are shared by both services):
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Neon's own `postgresql://...?sslmode=require&channel_binding=require` string. Both services accept it (the API rewrites the prefix to `postgresql+psycopg://` itself). |
+| `BETTER_AUTH_SECRET` | A new random string for production, not the local one |
+| `BETTER_AUTH_URL` | The production URL, e.g. `https://your-app.vercel.app` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | From Google Cloud; add `https://<your-domain>/api/auth/callback/google` as an authorized redirect URI and the domain as an authorized JavaScript origin |
+
+Things the deploy relies on: `classifier.joblib` and `retrieval.joblib` are committed (the deployed API can't train them), and `scikit-learn` is pinned to the version that wrote them. The database is the same Neon one used locally, already migrated and seeded; run `alembic upgrade head`, the `scripts.*` commands and `migrate-auth.mjs` against a fresh database first.
 
 ## Database
 
@@ -370,5 +413,6 @@ The project was built in stages, one commit and one push per stage, so `git log`
 | 7 | Next.js scaffold and the API client |
 | 8 | ChatGPT-style layout, collapsible sidebar, working chat |
 | 9 | Thinking delay, GSAP typed replies, feedback icons |
+| 10 | Better Auth (email + Google), roles, profile page, mascot logo, gold hover and glowing message box |
 
 Smaller commits in between: the README, replacing local Docker with Neon, and the input-validation fixes from the API review.
